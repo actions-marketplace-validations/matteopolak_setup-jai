@@ -16,17 +16,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest, windows-11-arm]
         tools: [all]
         include:
-          - { os: ubuntu-24.04, tools: 'jaic,jaifmt,jailint' }
-          - { os: windows-2025, tools: 'jaic,jaifmt,jailint' }
+          - { os: ubuntu-latest, tools: 'jaic,jaifmt,jailint' }
+          - { os: windows-latest, tools: 'jaic,jaifmt,jailint' }
+          - { os: ubuntu-latest, tools: 'jaic' }
+          - { os: ubuntu-latest, tools: all, version: '0.4.3' }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: jai
         uses: ./
         with:
           tools: ${{ matrix.tools }}
+          version: ${{ matrix.version || 'latest' }}
       - name: Check the outputs
         shell: bash
         run: |
@@ -48,9 +51,11 @@ jobs:
           jaic run hello.jai | tee out.txt
           grep -q "hello from jai" out.txt
       - name: Format check
+        if: contains(matrix.tools, 'jaifmt') || matrix.tools == 'all'
         shell: bash
         run: jaifmt --check hello.jai
       - name: Lint
+        if: contains(matrix.tools, 'jailint') || matrix.tools == 'all'
         shell: bash
         run: jailint -D warnings hello.jai
       - name: Second run uses the cache
@@ -58,3 +63,13 @@ jobs:
         uses: ./
         with:
           version: latest
+      - name: Excluded tools are not on PATH
+        if: matrix.tools == 'jaic'
+        shell: bash
+        run: |
+          ! command -v jaifmt
+          ! command -v jailint
+      - name: Pinned version is installed
+        if: matrix.version
+        shell: bash
+        run: jaic --version | grep -q "${{ matrix.version }}"
