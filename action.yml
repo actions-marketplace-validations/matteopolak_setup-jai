@@ -1,0 +1,68 @@
+name: Setup Jai
+description: Install the Jai toolchain (jaic, jaifmt, jailint, jailsp) from the matteopolak/jai releases.
+author: matteopolak
+branding:
+  icon: download
+  color: blue
+
+inputs:
+  version:
+    description: 'Release to install: "latest", or an exact version such as 0.4.3 or v0.4.3.'
+    default: latest
+  tools:
+    description: 'Tools to put on PATH, comma or space separated, from jaic, jaifmt, jailint, jailsp; or "all" for every tool the release ships.'
+    default: all
+  cache:
+    description: Cache the unpacked toolchain with actions/cache, keyed by version and platform.
+    default: 'true'
+  token:
+    description: GitHub token used to look up the latest release (avoids API rate limits).
+    default: ${{ github.token }}
+
+outputs:
+  version:
+    description: The installed version, without a leading v.
+    value: ${{ steps.expose.outputs.version }}
+  path:
+    description: Directory holding the tools (the one added to PATH).
+    value: ${{ steps.expose.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve the release
+      id: resolve
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/resolve.sh"
+
+    - name: Restore the toolchain cache
+      id: cache
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.resolve.outputs.dir }}
+        key: setup-jai-${{ steps.resolve.outputs.version }}-${{ steps.resolve.outputs.platform }}
+
+    - name: Download and verify the toolchain
+      shell: bash
+      env:
+        VERSION: ${{ steps.resolve.outputs.version }}
+        PLATFORM: ${{ steps.resolve.outputs.platform }}
+        ARCHIVE: ${{ steps.resolve.outputs.archive }}
+        ROOT: ${{ steps.resolve.outputs.root }}
+        DIR: ${{ steps.resolve.outputs.dir }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/install.sh"
+
+    - name: Add the tools to PATH
+      id: expose
+      shell: bash
+      env:
+        VERSION: ${{ steps.resolve.outputs.version }}
+        DIR: ${{ steps.resolve.outputs.dir }}
+        ROOT: ${{ steps.resolve.outputs.root }}
+        INPUT_TOOLS: ${{ inputs.tools }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/expose.sh"

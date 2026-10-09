@@ -1,0 +1,60 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} ${{ matrix.tools }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
+        tools: [all]
+        include:
+          - { os: ubuntu-24.04, tools: 'jaic,jaifmt,jailint' }
+          - { os: windows-2025, tools: 'jaic,jaifmt,jailint' }
+    steps:
+      - uses: actions/checkout@v4
+      - id: jai
+        uses: ./
+        with:
+          tools: ${{ matrix.tools }}
+      - name: Check the outputs
+        shell: bash
+        run: |
+          echo "version=${{ steps.jai.outputs.version }} path=${{ steps.jai.outputs.path }}"
+          test -n "${{ steps.jai.outputs.version }}"
+          test -n "${{ steps.jai.outputs.path }}"
+      - name: Version
+        run: jaic --version
+      - name: Hello world
+        shell: bash
+        run: |
+          cat > hello.jai <<'JAI'
+          #import "Basic";
+
+          main :: () {
+              print("hello from jai\n");
+          }
+          JAI
+          jaic run hello.jai | tee out.txt
+          grep -q "hello from jai" out.txt
+      - name: Format check
+        shell: bash
+        run: jaifmt --check hello.jai
+      - name: Lint
+        shell: bash
+        run: jailint -D warnings hello.jai
+      - name: Second run uses the cache
+        if: matrix.tools == 'all'
+        uses: ./
+        with:
+          version: latest
